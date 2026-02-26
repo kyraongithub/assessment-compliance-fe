@@ -1,21 +1,26 @@
-'use client'
+"use client";
 
-import { useTemplates } from '@/hooks/useTemplates'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Loader2 } from 'lucide-react'
-import Link from 'next/link'
+import { useTemplates } from "@/hooks/useTemplates";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Loader2 } from "lucide-react";
+import Link from "next/link";
+import { usePusherTemplates } from "@/hooks/usePusherTemplate";
 
 export function TemplatesList() {
-  const { data: templates, isLoading, error } = useTemplates()
+  const { data: templates, isLoading, error } = useTemplates();
+
+  // Connect to Pusher only when there are PROCESSING templates,
+  // auto-disconnect once all are done
+  usePusherTemplates(templates);
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
-    )
+    );
   }
 
   if (error) {
@@ -23,7 +28,7 @@ export function TemplatesList() {
       <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
         Failed to load templates. Please try again.
       </div>
-    )
+    );
   }
 
   if (!templates || templates.length === 0) {
@@ -31,7 +36,7 @@ export function TemplatesList() {
       <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
         <p>No templates available yet.</p>
       </div>
-    )
+    );
   }
 
   return (
@@ -42,20 +47,24 @@ export function TemplatesList() {
             <h3 className="font-semibold text-lg">{template.title}</h3>
             <Badge
               variant={
-                template.status === 'AVAILABLE'
-                  ? 'default'
-                  : template.status === 'PROCESSING'
-                    ? 'secondary'
-                    : 'destructive'
+                template.status === "AVAILABLE"
+                  ? "default"
+                  : template.status === "PROCESSING"
+                    ? "secondary"
+                    : "destructive"
               }
             >
+              {template.status === "PROCESSING" && (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              )}
               {template.status}
             </Badge>
           </div>
 
           {template.categoriesCount && (
             <p className="mb-2 text-sm text-muted-foreground">
-              {template.categoriesCount} categories • {template.requirementsCount} requirements
+              {template.categoriesCount} categories •{" "}
+              {template.requirementsCount} requirements
             </p>
           )}
 
@@ -66,18 +75,20 @@ export function TemplatesList() {
           )}
 
           <div className="mt-auto">
-            {template.status === 'AVAILABLE' ? (
+            {template.status === "AVAILABLE" ? (
               <Link href={`/assessments/new?templateId=${template.id}`}>
                 <Button className="w-full">Start Assessment</Button>
               </Link>
             ) : (
               <Button disabled className="w-full">
-                Not Available
+                {template.status === "PROCESSING"
+                  ? "Processing..."
+                  : "Not Available"}
               </Button>
             )}
           </div>
         </Card>
       ))}
     </div>
-  )
+  );
 }
