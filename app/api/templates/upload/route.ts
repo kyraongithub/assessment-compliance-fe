@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
     const backendFormData = new FormData();
     backendFormData.append("file", file);
 
-    // Forward title juga ke backend
     const title = formData.get("title") as string;
     if (title) {
       backendFormData.append("title", title);

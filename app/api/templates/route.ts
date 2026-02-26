@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
-        // Forward auth token from client if available
         ...(request.headers.get("authorization") && {
           Authorization: request.headers.get("authorization")!,
         }),
