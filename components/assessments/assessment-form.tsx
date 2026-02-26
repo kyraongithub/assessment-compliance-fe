@@ -1,17 +1,9 @@
 "use client";
 
-import {
-  useAssessment,
-  useUpdateSubmission,
-  useReviewSubmission,
-} from "@/hooks/useAssessments";
-import { useTemplate } from "@/hooks/useTemplates";
-import { useAuth } from "@/hooks/useAuth";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -19,100 +11,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Save, FileText, Paperclip, Users, Send } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
-import { toast } from "sonner";
+import { Textarea } from "@/components/ui/textarea";
+import { useSubmissionForm } from "@/hooks/useAssessments";
+import { FileText, Loader2, Paperclip, Save, Send, Users } from "lucide-react";
 
 interface AssessmentFormProps {
   assessmentId: string;
 }
 
-type SubmissionStatus = "PENDING" | "COMPLIANT" | "REJECTED";
 type ReviewStatus = "COMPLIANT" | "REJECTED";
 
-interface FormEntry {
-  implementationDetail: string;
-  evidenceLink: string;
-  status: SubmissionStatus;
-}
-
-interface ReviewEntry {
-  reviewStatus: ReviewStatus | "";
-  reviewNote: string;
-}
-
 export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
-  const { data: assessment, isLoading } = useAssessment(assessmentId);
-  const { data: template } = useTemplate(assessment?.templateId || "");
-  const { mutate: updateSubmission, isPending: isSaving } =
-    useUpdateSubmission();
-  const { mutate: reviewSubmission, isPending: isReviewing } =
-    useReviewSubmission();
-  const { user } = useAuth();
-  const isAdmin = user?.role === "ADMIN";
-
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
-    null,
-  );
-  const [selectedRequirementId, setSelectedRequirementId] = useState<
-    string | null
-  >(null);
-  const [showReviewPanel, setShowReviewPanel] = useState(false);
-  const [formData, setFormData] = useState<Record<string, FormEntry>>({});
-  const [reviewData, setReviewData] = useState<Record<string, ReviewEntry>>({});
-
-  const initializedRef = useRef(false);
-
-  // Populate formData once from existing submissions
-  useEffect(() => {
-    if (!assessment?.submissions || initializedRef.current) return;
-    initializedRef.current = true;
-
-    const submissionMap: Record<string, FormEntry> = {};
-    for (const sub of assessment.submissions) {
-      submissionMap[sub.requirementId] = {
-        implementationDetail: sub.implementationDetail ?? "",
-        evidenceLink: sub.evidenceLink ?? "",
-        status: sub.status ?? "PENDING",
-      };
-    }
-    setFormData(submissionMap);
-  }, [assessment?.submissions]);
-
-  // Derived values — computed before early returns so hooks order is stable
-  const selectedCategory =
-    template?.categories.find((c) => c.id === selectedCategoryId) ??
-    template?.categories[0];
-
-  const selectedRequirement =
-    selectedCategory?.requirements.find(
-      (r) => r.id === selectedRequirementId,
-    ) ?? selectedCategory?.requirements[0];
-
-  const currentSubmission = selectedRequirement
-    ? assessment?.submissions?.find(
-        (s) => s.requirementId === selectedRequirement.id,
-      )
-    : undefined;
-
-  const currentStatus = selectedRequirement
-    ? formData[selectedRequirement.id]?.status
-    : undefined;
-
-  const hasSubmission = !!currentSubmission;
-
-  const isPendingSubmission =
-    isAdmin && hasSubmission && currentStatus === "PENDING";
-  const showReviewButton = isAdmin && (showReviewPanel || isPendingSubmission);
-
-  useEffect(() => {
-    if (!showReviewPanel) return;
-    if (currentStatus !== undefined && currentStatus !== "PENDING") {
-      setShowReviewPanel(false);
-    }
-  }, [currentStatus, showReviewPanel]);
-
-  // ─── Early returns AFTER all hooks ───────────────────────────────────────────
+  const {
+    formData,
+    selectedCategory,
+    selectedRequirement,
+    currentReview,
+    currentStatus,
+    hasSubmission,
+    showReviewButton,
+    canReview,
+    handleInputChange,
+    handleSave,
+    handleCompleteReview,
+    setCurrentReview,
+    getStatusDotClass,
+    isLoading,
+    template,
+    assessment,
+    setShowReviewPanel,
+    showReviewPanel,
+    setSelectedCategoryId,
+    setSelectedRequirementId,
+    selectedCategoryId,
+    selectedRequirementId,
+    isSaving,
+    isReviewing,
+  } = useSubmissionForm(assessmentId);
 
   if (isLoading) {
     return (
@@ -125,104 +60,6 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
   if (!assessment || !template) {
     return <div className="text-gray-400 p-8">Assessment not found</div>;
   }
-
-  // ─── Event handlers ───────────────────────────────────────────────────────────
-
-  const currentReview: ReviewEntry = currentSubmission
-    ? (reviewData[currentSubmission.id] ?? { reviewStatus: "", reviewNote: "" })
-    : { reviewStatus: "", reviewNote: "" };
-
-  const setCurrentReview = (patch: Partial<ReviewEntry>) => {
-    if (!currentSubmission) return;
-    setReviewData((prev) => ({
-      ...prev,
-      [currentSubmission.id]: { ...currentReview, ...patch },
-    }));
-  };
-
-  const handleInputChange = (
-    requirementId: string,
-    field: "implementationDetail" | "evidenceLink",
-    value: string,
-  ) => {
-    setFormData((prev) => ({
-      ...prev,
-      [requirementId]: { ...prev[requirementId], [field]: value },
-    }));
-  };
-
-  const handleSave = () => {
-    if (!selectedRequirement) return;
-    const requirementId = selectedRequirement.id;
-    const data = formData[requirementId];
-    if (!data?.implementationDetail && !data?.evidenceLink) {
-      toast.error("Please fill in at least one field");
-      return;
-    }
-    updateSubmission(
-      {
-        assessmentId,
-        requirementId,
-        implementationDetail: data.implementationDetail,
-        evidenceLink: data.evidenceLink,
-      },
-      {
-        onSuccess: () => toast.success("Submission saved successfully"),
-        onError: () => toast.error("Failed to save submission"),
-      },
-    );
-  };
-
-  const handleCompleteReview = () => {
-    if (!currentSubmission) {
-      toast.error("This requirement has no submission yet");
-      return;
-    }
-    if (!currentReview.reviewStatus) {
-      toast.error("Please select a review status");
-      return;
-    }
-
-    reviewSubmission(
-      {
-        submissionId: currentSubmission.id,
-        status: currentReview.reviewStatus as ReviewStatus,
-        reviewNote: currentReview.reviewNote || undefined,
-      },
-      {
-        onSuccess: () => {
-          toast.success("Review submitted");
-          // Optimistically update dot — this will also trigger the auto-close effect
-          setFormData((prev) => ({
-            ...prev,
-            [currentSubmission.requirementId]: {
-              ...prev[currentSubmission.requirementId],
-              status: currentReview.reviewStatus as ReviewStatus,
-            },
-          }));
-        },
-        onError: () => toast.error("Failed to submit review"),
-      },
-    );
-  };
-
-  const getStatusDotClass = (requirementId: string, isActive: boolean) => {
-    const entry = formData[requirementId];
-    const hasData = !!entry?.implementationDetail || !!entry?.evidenceLink;
-    if (!hasData) return isActive ? "bg-blue-400" : "bg-gray-300";
-    switch (entry.status) {
-      case "COMPLIANT":
-        return "bg-green-400";
-      case "REJECTED":
-        return "bg-red-400";
-      default:
-        return "bg-blue-400";
-    }
-  };
-
-  const canReview = isAdmin && showReviewPanel;
-
-  // ─── Render ───────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col h-screen bg-white">
@@ -255,7 +92,6 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
         )}
       </div>
 
-      {/* Tab bar */}
       <div className="border-b border-gray-200 px-6 flex items-center gap-6 bg-white">
         <button className="py-3 text-sm font-medium text-blue-600 border-b-2 border-blue-600 -mb-px flex items-center gap-1.5">
           <FileText className="h-3.5 w-3.5" />
@@ -271,9 +107,7 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
         </button>
       </div>
 
-      {/* Panels */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Panel 1: Clauses */}
         <div className="w-48 shrink-0 border-r border-gray-200 overflow-y-auto bg-gray-50">
           <div className="px-4 pt-4 pb-2">
             <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">
@@ -301,7 +135,6 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
           </nav>
         </div>
 
-        {/* Panel 2: Requirements list */}
         <div className="w-64 shrink-0 border-r border-gray-200 overflow-y-auto bg-white">
           {selectedCategory && (
             <>
@@ -337,7 +170,6 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
           )}
         </div>
 
-        {/* Panel 3: Form detail */}
         <div className="flex-1 overflow-y-auto">
           {selectedRequirement ? (
             <div className="max-w-2xl px-8 py-6">
@@ -408,7 +240,6 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
                   />
                 </div>
 
-                {/* Save — non-admin only, hide when COMPLIANT */}
                 {currentStatus !== "COMPLIANT" &&
                   currentStatus !== "REJECTED" && (
                     <div className="pt-1">
@@ -440,7 +271,6 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
           )}
         </div>
 
-        {/* Panel 4: Admin Review Panel */}
         {canReview && (
           <div className="w-72 shrink-0 border-l border-gray-200 bg-white flex flex-col h-full">
             <div className="px-5 pt-5 pb-4 border-b border-gray-100">
@@ -450,7 +280,6 @@ export function AssessmentForm({ assessmentId }: AssessmentFormProps) {
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-              {/* Warning jika requirement yang dipilih belum ada submission */}
               {!hasSubmission && (
                 <div className="rounded-lg bg-amber-50 border border-amber-100 p-3">
                   <p className="text-xs text-amber-700">
