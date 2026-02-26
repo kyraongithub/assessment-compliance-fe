@@ -365,16 +365,6 @@ export async function GET(
 - Check that mutations call `queryClient.invalidateQueries()`
 - Verify data is being returned from API
 
-## Next Steps
-
-To extend this project:
-
-1. **Add Authentication** - Integrate with NextAuth for user sessions
-2. **Add Real-time Updates** - Connect to Pusher for live notifications
-3. **Add Filtering & Search** - Enhance template/assessment lists
-4. **Add Export** - Generate PDF reports of assessments
-5. **Add Analytics** - Track compliance metrics
-
 ## Resources
 
 - [Next.js App Router Documentation](https://nextjs.org/docs)
